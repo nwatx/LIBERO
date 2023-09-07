@@ -3,8 +3,9 @@ import torch.nn as nn
 
 from libero.lifelong.algos import Sequential
 from libero.lifelong.models.base_policy import BasePolicy
+from libero.lifelong.models.modules.language_modules import MLPEncoder
+from libero.lifelong.models.modules.rgb_modules import ResnetEncoder
 from libero.lifelong.models.policy_head import GMMHead
-
 
 class ExtraModalities:
     def __init__(self,
@@ -51,6 +52,12 @@ class ExtraModalities:
         return (self.extra_low_level_feature_dim,)
 
 
+def get_encoder(encoder_name: str):
+    if encoder_name == "ResnetEncoder":
+        return ResnetEncoder
+    return None
+
+
 class BCPolicy(BasePolicy):
     """
     Input: (o_{t-H}, ... , o_t)
@@ -75,7 +82,7 @@ class BCPolicy(BasePolicy):
                 kwargs.language_dim = policy_cfg.language_encoder.network_kwargs.input_size
                 self.image_encoders[name] = {
                     "input_shape": shape_meta["all_shapes"][name],
-                    "encoder": eval(policy_cfg.image_encoder.network)(**kwargs)
+                    "encoder": get_encoder(policy_cfg.image_encoder.network)(**kwargs)
                 }
                 rnn_input_size += image_embed_size
         self.encoders = nn.ModuleList([x["encoder"] for x in self.image_encoders.values()])
