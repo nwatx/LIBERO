@@ -58,7 +58,7 @@ def main(hydra_cfg):
     cfg.init_states_folder = cfg.init_states_folder or get_libero_path("init_states")
 
     benchmark = get_benchmark(cfg.benchmark_name)(cfg.data.task_order_index)
-    n_manip_tasks = benchmark.n_tasks
+    n_manip_tasks = 1
 
     # prepare datasets from the benchmark
     manip_datasets = []
@@ -214,54 +214,19 @@ def main(hydra_cfg):
             print(f"[info] start training on task {i}")
             algo.train()
 
-            t0 = time.time()
             s_fwd, l_fwd = algo.learn_one_task(
                 datasets[i], i, benchmark, result_summary
             )
             result_summary["S_fwd"][i] = s_fwd
             result_summary["L_fwd"][i] = l_fwd
-            t1 = time.time()
-
-            # evalute on all seen tasks at the end of learning each task
-            if cfg.eval.eval:
-                L = evaluate_loss(cfg, algo, benchmark, datasets[: i + 1])
-                t2 = time.time()
-                S = evaluate_success(
-                    cfg=cfg,
-                    algo=algo,
-                    benchmark=benchmark,
-                    task_ids=list(range((i + 1) * gsz)),
-                    result_summary=result_summary if cfg.eval.save_sim_states else None,
-                )
-                t3 = time.time()
-                result_summary["L_conf_mat"][i][: i + 1] = L
-                result_summary["S_conf_mat"][i][: i + 1] = S
-
-                if cfg.use_wandb:
-                    wandb.run.summary["success_confusion_matrix"] = result_summary[
-                        "S_conf_mat"
-                    ]
-                    wandb.run.summary["loss_confusion_matrix"] = result_summary[
-                        "L_conf_mat"
-                    ]
-                    wandb.run.summary["fwd_transfer_success"] = result_summary["S_fwd"]
-                    wandb.run.summary["fwd_transfer_loss"] = result_summary["L_fwd"]
-                    wandb.run.summary.update()
-
-                print(
-                    f"[info] train time (min) {(t1-t0)/60:.1f} "
-                    + f"eval loss time {(t2-t1)/60:.1f} "
-                    + f"eval success time {(t3-t2)/60:.1f}"
-                )
-                print(("[Task %2d loss ] " + " %4.2f |" * (i + 1)) % (i, *L))
-                print(("[Task %2d succ.] " + " %4.2f |" * (i + 1)) % (i, *S))
-                torch.save(
-                    result_summary, os.path.join(cfg.experiment_dir, f"result.pt")
-                )
 
     print("[info] finished learning\n")
     if cfg.use_wandb:
         wandb.finish()
+
+    # save the result summary
+    torch.save(result_summary, os.path.join(cfg.experiment_dir, f"result.pt"))
+    print(result_summary)
 
 
 if __name__ == "__main__":

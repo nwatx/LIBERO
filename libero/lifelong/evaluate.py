@@ -127,6 +127,7 @@ def main():
 
     # find the checkpoint
     experiment_id = 0
+
     for path in Path(experiment_dir).glob("run_*"):
         if not path.is_dir():
             continue
@@ -136,6 +137,7 @@ def main():
                 experiment_id = folder_id
         except BaseException:
             pass
+
     if experiment_id == 0:
         print(f"[error] cannot find the checkpoint under {experiment_dir}")
         sys.exit(0)
@@ -152,7 +154,8 @@ def main():
             sd, cfg, previous_mask = torch_load_model(
                 model_path, map_location=args.device_id
             )
-    except:
+    except Exception as e:
+        print(e)
         print(f"[error] cannot find the checkpoint at {str(model_path)}")
         sys.exit(0)
 

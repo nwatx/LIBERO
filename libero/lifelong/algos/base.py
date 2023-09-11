@@ -179,54 +179,12 @@ class Sequential(nn.Module, metaclass=AlgoMeta):
             t1 = time.time()
 
             print(
-                f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.2f} | time: {(t1-t0)/60:4.2f}"
+                f"[info] Epoch: {epoch:3d} | train loss: {training_loss:5.2f} | time: {(t1 - t0) / 60:4.2f}"
             )
 
-            if epoch % self.cfg.eval.eval_every == 0:  # evaluate BC loss
-                # every eval_every epoch, we evaluate the agent on the current task,
-                # then we pick the best performant agent on the current task as
-                # if it stops learning after that specific epoch. So the stopping
-                # criterion for learning a new task is achieving the peak performance
-                # on the new task. Future work can explore how to decide this stopping
-                # epoch by also considering the agent's performance on old tasks.
-                losses.append(training_loss)
-
-                t0 = time.time()
-
-                task_str = f"k{task_id}_e{epoch//self.cfg.eval.eval_every}"
-                sim_states = (
-                    result_summary[task_str] if self.cfg.eval.save_sim_states else None
-                )
-                success_rate = evaluate_one_task_success(
-                    cfg=self.cfg,
-                    algo=self,
-                    task=task,
-                    task_emb=task_emb,
-                    task_id=task_id,
-                    sim_states=sim_states,
-                    task_str="",
-                )
-                successes.append(success_rate)
-
-                if prev_success_rate < success_rate:
-                    torch_save_model(self.policy, model_checkpoint_name, cfg=self.cfg)
-                    prev_success_rate = success_rate
-                    idx_at_best_succ = len(losses) - 1
-
-                t1 = time.time()
-
-                cumulated_counter += 1.0
-                ci = confidence_interval(success_rate, self.cfg.eval.n_eval)
-                tmp_successes = np.array(successes)
-                tmp_successes[idx_at_best_succ:] = successes[idx_at_best_succ]
-                print(
-                    f"[info] Epoch: {epoch:3d} | succ: {success_rate:4.2f} ± {ci:4.2f} | best succ: {prev_success_rate} "
-                    + f"| succ. AoC {tmp_successes.sum()/cumulated_counter:4.2f} | time: {(t1-t0)/60:4.2f}",
-                    flush=True,
-                )
-
-            if self.scheduler is not None and epoch > 0:
-                self.scheduler.step()
+            # save on the last epoch
+            if epoch == self.cfg.train.n_epochs:
+                torch_save_model(self.policy, model_checkpoint_name, cfg=self.cfg)
 
         # load the best performance agent on the current task
         self.policy.load_state_dict(torch_load_model(model_checkpoint_name)[0])
@@ -248,10 +206,7 @@ class Sequential(nn.Module, metaclass=AlgoMeta):
             auc_checkpoint_name,
         )
 
-        # pretend that the agent stops learning once it reaches the peak performance
-        losses[idx_at_best_succ:] = losses[idx_at_best_succ]
-        successes[idx_at_best_succ:] = successes[idx_at_best_succ]
-        return successes.sum() / cumulated_counter, losses.sum() / cumulated_counter
+        return 0, 0
 
     def reset(self):
         self.policy.reset()

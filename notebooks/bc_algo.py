@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from torchvision.models.detection import maskrcnn_resnet50_fpn
+
 from libero.lifelong.algos import Sequential
 from libero.lifelong.models.base_policy import BasePolicy
 from libero.lifelong.models.modules.language_modules import MLPEncoder
@@ -12,6 +14,7 @@ class ExtraModalities:
                  use_joint=False,
                  use_gripper=False,
                  use_ee=False,
+                 use_bounding_box=False,
                  extra_hidden_size=64,
                  extra_embedding_size=32):
 
@@ -19,6 +22,10 @@ class ExtraModalities:
         self.use_gripper = use_gripper
         self.use_ee = use_ee
         self.extra_embedding_size = extra_embedding_size
+        self.use_bounding_box = use_bounding_box
+
+        # neo: added a bounding box encoder
+        self.bounding_box_encoder = maskrcnn_resnet50_fpn(pretrained=True)
 
         joint_states_dim = 7
         gripper_states_dim = 2
@@ -74,6 +81,8 @@ class BCPolicy(BasePolicy):
         rnn_input_size = 0
         image_embed_size = 64
         self.image_encoders = {}
+
+        # shape_meta["all_shapes"] is a dict of all the modalities
         for name in shape_meta["all_shapes"].keys():
             if "rgb" in name or "depth" in name:
                 kwargs = policy_cfg.image_encoder.network_kwargs
@@ -185,8 +194,7 @@ class BCPolicy(BasePolicy):
 class BehavioralCloningLifelongAlgo(Sequential):
     def __init__(self,
                  n_tasks,
-                 cfg,
-                 **policy_kwargs):
+                 cfg):
         super().__init__(n_tasks=n_tasks, cfg=cfg)
         # define the learning policy
         self.policy = BCPolicy(cfg, cfg.shape_meta)
