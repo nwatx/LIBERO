@@ -186,7 +186,7 @@ def main():
 
     # get the benchmark the task belongs to
     benchmark = get_benchmark(cfg.benchmark_name)(cfg.data.task_order_index)
-    descriptions = [benchmark.get_task(i).language for i in range(10)]
+    descriptions = [benchmark.get_task(i).language for i in range(1)]
     task_embs = get_task_embs(cfg, descriptions)
     benchmark.set_task_embs(task_embs)
 
@@ -234,6 +234,8 @@ def main():
         f"{args.benchmark}_{args.algo}_{args.policy}_{args.seed}_load{args.load_task}_on{args.task_id}_videos",
     )
 
+    print(video_folder)
+
     with Timer() as t, VideoWriter(video_folder, args.save_videos) as video_writer:
         env_args = {
             "bddl_file_name": os.path.join(
@@ -243,7 +245,7 @@ def main():
             "camera_widths": cfg.data.img_w,
         }
 
-        env_num = 20
+        env_num = 1
         env = SubprocVectorEnv(
             [lambda: OffScreenRenderEnv(**env_args) for _ in range(env_num)]
         )
@@ -294,6 +296,8 @@ def main():
             "loss": test_loss,
             "success_rate": success_rate,
         }
+
+        print(eval_stats)
 
         os.system(f"mkdir -p {args.save_dir}")
         torch.save(eval_stats, save_folder)
