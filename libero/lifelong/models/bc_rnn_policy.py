@@ -7,7 +7,7 @@ from libero.lifelong.models.modules.rgb_modules import *
 from libero.lifelong.models.modules.language_modules import *
 from libero.lifelong.models.base_policy import BasePolicy
 from libero.lifelong.models.policy_head import *
-from torchvision.models.detection import maskrcnn_resnet50_fpn
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
 
 ###############################################################################
@@ -74,6 +74,53 @@ class ExtraModalities:
 #
 ###############################################################################
 
+class BoundingBoxEncoder(nn.Module):
+    def __init__(self, d_embedding=32):
+        super().__init__()
+
+        # reduces the backbone size so the model becomes lighter
+
+        self.bb_detector = fasterrcnn_resnet50_fpn(
+            pretrained=True
+        )
+
+        self.bounding_box_encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_embedding,
+            nhead=4,
+            dim_feedforward=512,
+            dropout=0.1,
+            activation="relu"
+        )
+
+        self.bounding_box_encoder = nn.TransformerEncoder(
+            encoder_layer=self.bounding_box_encoder_layer,
+            num_layers=1
+        )
+
+        # should be (bounding box + label) plus embedding dim
+        self.linear = nn.Linear(5, d_embedding)
+
+    def forward(self, image_view):
+        """
+        image_view: (B, T, C, H, W)
+        """
+        self.bb_detector.eval()
+        bb = self.bb_detector(image_view)
+
+        # get boxes for each T
+        bb = [torch.cat((x["boxes"], x["labels"].unsqueeze(-1)), dim=-1) for x in bb]
+
+        # encode each box in each T
+        bb = [self.linear(x) for x in bb]  # each are shape [13, 32]
+
+        # encode each box
+        for i in range(len(bb)):
+            bb[i] = self.bounding_box_encoder(bb[i].unsqueeze(1))
+            bb[i] = bb[i].mean(dim=0)
+
+        bb = torch.stack(bb, dim=1)
+        return bb
+
 
 class BCRNNPolicy(BasePolicy):
     """
@@ -90,7 +137,9 @@ class BCRNNPolicy(BasePolicy):
         image_embed_size = policy_cfg.image_embed_size
         self.image_encoders = {}
 
-        self.bb_detector = maskrcnn_resnet50_fpn(pretrained=True)
+        # inner embedding of size 32
+        self.bb_encoder = BoundingBoxEncoder(32)
+        rnn_input_size += 32
 
         for name in shape_meta["all_shapes"].keys():
             if "rgb" in name or "depth" in name:
@@ -132,18 +181,6 @@ class BCRNNPolicy(BasePolicy):
             batch_first=True,
             dropout=policy_cfg.rnn_dropout,
             bidirectional=policy_cfg.rnn_bidirectional,
-        )
-
-        print(shape_meta)
-        print(cfg)
-
-        ### will encode bounding boxes of form (x1, y1, x2, y2)
-        self.bounding_box_encoder = nn.TransformerEncoderLayer(
-            d_model=4,
-            nhead=4,
-            dim_feedforward=2048,
-            dropout=0.1,
-            activation="relu"
         )
 
         ### 4. use policy head to output action
@@ -188,12 +225,12 @@ class BCRNNPolicy(BasePolicy):
                                         image_view.shape[3], image_view.shape[4])
 
         # list of Tensors of shape (N, 4) where N is the number of bounding boxes
-        bounding_boxes = self.bb_detector(image_view)[0]["boxes"]
-
-        # encode the bounding boxes into a single vector using the transformer encoder
-        # shape (N, 4, 1)
-        bounding_boxes = bounding_boxes.unsqueeze(1)
-        bounding_box_embedding = self.bounding_box_encoder(bounding_boxes)
+        bounding_box_embedding = self.bb_encoder.forward(image_view)
+        # print(f"bounding_box_embedding.shape: {bounding_box_embedding.shape}")
+        # print("encoded.shape: ", encoded.shape)
+        # encoded.shape = (1, 10, 137)
+        # bounding box embedding shape: [32]
+        encoded = torch.cat([encoded, bounding_box_embedding], dim=-1)
 
         # 3. language encoding
         lang_h = self.language_encoder(data)  # (B, H)

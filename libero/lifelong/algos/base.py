@@ -6,6 +6,7 @@ import robomimic.utils.tensor_utils as TensorUtils
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import tqdm
 from torch.utils.data import DataLoader, RandomSampler
 
 from libero.lifelong.metric import *
@@ -163,16 +164,16 @@ class Sequential(nn.Module, metaclass=AlgoMeta):
 
             t0 = time.time()
 
-            if epoch > 0:  # update
+            if epoch >= 0:  # update
                 self.policy.train()
                 training_loss = 0.0
-                for (idx, data) in enumerate(train_dataloader):
+                for (idx, data) in enumerate(tqdm.tqdm(train_dataloader)):
                     loss = self.observe(data)
                     training_loss += loss
                 training_loss /= len(train_dataloader)
             else:  # just evaluate the zero-shot performance on 0-th epoch
                 training_loss = 0.0
-                for (idx, data) in enumerate(train_dataloader):
+                for (idx, data) in enumerate(tqdm.tqdm(train_dataloader)):
                     loss = self.eval_observe(data)
                     training_loss += loss
                 training_loss /= len(train_dataloader)
