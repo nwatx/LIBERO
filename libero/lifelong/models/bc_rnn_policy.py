@@ -7,6 +7,7 @@ from libero.lifelong.models.modules.rgb_modules import *
 from libero.lifelong.models.modules.language_modules import *
 from libero.lifelong.models.base_policy import BasePolicy
 from libero.lifelong.models.policy_head import *
+from torchvision.models.detection import maskrcnn_resnet50_fpn
 
 
 ###############################################################################
@@ -18,12 +19,13 @@ from libero.lifelong.models.policy_head import *
 
 class ExtraModalities:
     def __init__(
-        self,
-        use_joint=False,
-        use_gripper=False,
-        use_ee=False,
-        extra_hidden_size=64,
-        extra_embedding_size=32,
+            self,
+            use_joint=False,
+            use_gripper=False,
+            use_ee=False,
+            extra_hidden_size=64,
+            use_bounding_box=False,
+            extra_embedding_size=32,
     ):
 
         self.use_joint = use_joint
@@ -36,9 +38,9 @@ class ExtraModalities:
         ee_dim = 3
 
         self.extra_low_level_feature_dim = (
-            int(use_joint) * joint_states_dim
-            + int(use_gripper) * gripper_states_dim
-            + int(use_ee) * ee_dim
+                int(use_joint) * joint_states_dim
+                + int(use_gripper) * gripper_states_dim
+                + int(use_ee) * ee_dim
         )
         assert self.extra_low_level_feature_dim > 0, "[error] no extra information"
 
@@ -58,6 +60,7 @@ class ExtraModalities:
             tensor_list.append(obs_dict["gripper_states"])
         if self.use_ee:
             tensor_list.append(obs_dict["ee_states"])
+
         x = torch.cat(tensor_list, dim=-1)
         return x
 
@@ -86,6 +89,9 @@ class BCRNNPolicy(BasePolicy):
         rnn_input_size = 0
         image_embed_size = policy_cfg.image_embed_size
         self.image_encoders = {}
+
+        self.bb_detector = maskrcnn_resnet50_fpn(pretrained=True)
+
         for name in shape_meta["all_shapes"].keys():
             if "rgb" in name or "depth" in name:
                 kwargs = policy_cfg.image_encoder.network_kwargs
@@ -128,6 +134,18 @@ class BCRNNPolicy(BasePolicy):
             bidirectional=policy_cfg.rnn_bidirectional,
         )
 
+        print(shape_meta)
+        print(cfg)
+
+        ### will encode bounding boxes of form (x1, y1, x2, y2)
+        self.bounding_box_encoder = nn.TransformerEncoderLayer(
+            d_model=4,
+            nhead=4,
+            dim_feedforward=2048,
+            dropout=0.1,
+            activation="relu"
+        )
+
         ### 4. use policy head to output action
         self.D = 2 if policy_cfg.rnn_bidirectional else 1
         policy_head_kwargs = policy_cfg.policy_head.network_kwargs
@@ -142,6 +160,8 @@ class BCRNNPolicy(BasePolicy):
         self.eval_c0 = None
 
     def forward(self, data, train_mode=True):
+        # add bounding box encoding information from mask rcnn from image necoder
+
         # 1. encode image
         encoded = []
         for img_name in self.image_encoders.keys():
@@ -150,15 +170,30 @@ class BCRNNPolicy(BasePolicy):
             e = self.image_encoders[img_name]["encoder"](
                 x.reshape(B * T, C, H, W),
                 langs=data["task_emb"]
-                .reshape(B, 1, -1)
-                .repeat(1, T, 1)
-                .reshape(B * T, -1),
+                    .reshape(B, 1, -1)
+                    .repeat(1, T, 1)
+                    .reshape(B * T, -1),
             ).view(B, T, -1)
             encoded.append(e)
 
         # 2. add joint states, gripper info, etc.
         encoded.append(self.extra_encoder(data["obs"]))  # add (B, T, H_extra)
         encoded = torch.cat(encoded, -1)  # (B, T, H_all)
+
+        # add bounding box encoding information from mask rcnn from image necoder
+        # (B, T, H_all) -> (B, T, H_all + H_bounding_box)
+        image_view = data["obs"]["agentview_rgb"]  # (B, T, C, H, W)
+        # convert to (C, H, W)
+        image_view = image_view.reshape(image_view.shape[0] * image_view.shape[1], image_view.shape[2],
+                                        image_view.shape[3], image_view.shape[4])
+
+        # list of Tensors of shape (N, 4) where N is the number of bounding boxes
+        bounding_boxes = self.bb_detector(image_view)[0]["boxes"]
+
+        # encode the bounding boxes into a single vector using the transformer encoder
+        # shape (N, 4, 1)
+        bounding_boxes = bounding_boxes.unsqueeze(1)
+        bounding_box_embedding = self.bounding_box_encoder(bounding_boxes)
 
         # 3. language encoding
         lang_h = self.language_encoder(data)  # (B, H)
