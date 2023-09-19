@@ -12,7 +12,7 @@ request_memory = 2500
 executable = /bin/bash
 arguments = train.sh
 getenv = true
-output = CondorOutput/{}.out
-error = CondorOutput/{}.err
-log = CondorOutput/{}.txt
+output = CondorOutput/run.out
+error = CondorOutput/run.err
+log = CondorOutput/run.txt
 Queue
