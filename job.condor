@@ -1,11 +1,18 @@
-Executable = train.sh
-Log = foo.log
-+GPUJob = true
-requirements = (TARGET.GPUSlot) && InMastodon
-request_memory=16000
-request_gpus=2
-+Project="AI_ROBOTICS"
-+ProjectDescription="training for behavioral cloning"
-+Group="UNDER"
-Notification = complete
+# doc at : http://research.cs.wisc.edu/htcondor/manual/current/condor_submit.html
++Group ="UNDER"
++Project ="AI_ROBOTICS"
++ProjectDescription ="libero"
++GPUJob=true
+Universe = vanilla
+Requirements = (regexp("nandor-3",TARGET.Machine) || regexp("eldar",TARGET.Machine) || regexp("nandor-5",TARGET.Machine) || regexp("nandor-2",TARGET.Machine) || regexp("nandor-4",TARGET.Machine))
+# UTCS has 18 such machine, to take a look, run 'condor_status  -constraint 'GTX1080==true'
+request_cpus = 1
+request_gpus = 2
+request_memory = 2500
+executable = /bin/bash
+arguments = eval_batch/eval_gpu.sh {} {} {} {} {} {}
+getenv = true
+output = CondorOutput/{}.out
+error = CondorOutput/{}.err
+log = CondorOutput/{}.txt
 Queue
