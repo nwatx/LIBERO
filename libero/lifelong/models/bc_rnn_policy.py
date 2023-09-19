@@ -105,7 +105,8 @@ class BoundingBoxEncoder(nn.Module):
         image_view: (B, T, C, H, W)
         """
         self.bb_detector.eval()
-        bb = self.bb_detector(image_view)
+        with torch.no_grad():
+            bb = self.bb_detector(image_view)
 
         # get boxes for each T
         bb = [torch.cat((x["boxes"], x["labels"].unsqueeze(-1)), dim=-1) for x in bb]

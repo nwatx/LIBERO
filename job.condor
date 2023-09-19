@@ -1,0 +1,4 @@
+Executable = train.sh
+Log = foo.log
+request_gpus=2
+Queue
