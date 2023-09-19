@@ -1,4 +1,7 @@
 Executable = train.sh
 Log = foo.log
 request_gpus=2
+Project="AI_ROBOTICS"
+ProjectDescription="training for behavioral cloning"
+Group="UNDER"
 Queue
