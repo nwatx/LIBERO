@@ -1,6 +1,6 @@
 # training
 n_epochs: 50
-batch_size: 16
+batch_size: 1
 num_workers: 1
 grad_clip: 100.
 loss_scale: 1.0

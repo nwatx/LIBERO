@@ -1,6 +1,7 @@
 import robomimic.utils.tensor_utils as TensorUtils
 import torch
 import torch.nn as nn
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
 from libero.lifelong.models.modules.rgb_modules import *
 from libero.lifelong.models.modules.language_modules import *
@@ -167,6 +168,54 @@ class PerturbationAttention:
 #
 ###############################################################################
 
+class BoundingBoxEncoder(nn.Module):
+    def __init__(self, d_embedding=32):
+        super().__init__()
+
+        # reduces the backbone size so the model becomes lighter
+
+        self.bb_detector = fasterrcnn_resnet50_fpn(
+            pretrained=True
+        )
+
+        self.bounding_box_encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_embedding,
+            nhead=4,
+            dim_feedforward=512,
+            dropout=0.1,
+            activation="relu"
+        )
+
+        self.bounding_box_encoder = nn.TransformerEncoder(
+            encoder_layer=self.bounding_box_encoder_layer,
+            num_layers=1
+        )
+
+        # should be (bounding box + label) plus embedding dim
+        self.linear = nn.Linear(5, d_embedding)
+
+    def forward(self, image_view):
+        """
+        image_view: (B, T, C, H, W)
+        """
+        self.bb_detector.eval()
+        with torch.no_grad():
+            bb = self.bb_detector(image_view)
+
+        # get boxes for each T
+        bb = [torch.cat((x["boxes"], x["labels"].unsqueeze(-1)), dim=-1) for x in bb]
+
+        # encode each box in each T
+        bb = [self.linear(x) for x in bb]  # each are shape [13, 32]
+
+        # encode each box
+        for i in range(len(bb)):
+            bb[i] = self.bounding_box_encoder(bb[i].unsqueeze(1))
+            bb[i] = bb[i].mean(dim=0)
+
+        bb = torch.stack(bb, dim=1)
+        return bb
+
 
 class BCTransformerPolicy(BasePolicy):
     """
@@ -204,6 +253,9 @@ class BCTransformerPolicy(BasePolicy):
         self.language_encoder = eval(policy_cfg.language_encoder.network)(
             **policy_cfg.language_encoder.network_kwargs
         )
+
+        self.bb_encoder_size = 64
+        self.bb_encoder = BoundingBoxEncoder(d_embedding=self.bb_encoder_size)
 
         ### 3. encode extra information (e.g. gripper, joint_state)
         self.extra_encoder = ExtraModalityTokens(
@@ -278,6 +330,15 @@ class BCTransformerPolicy(BasePolicy):
             ).view(B, T, 1, -1)
             encoded.append(img_encoded)
         encoded = torch.cat(encoded, -2)  # (B, T, num_modalities, E)
+
+        # 4. encode bounding box
+        image_view = data["obs"]["agentview_rgb"]
+        image_view = image_view.reshape(image_view.shape[0] * image_view.shape[1], image_view.shape[2],
+                                        image_view.shape[3], image_view.shape[4])
+        # (1, 10, 64)
+        bb_encoded = self.bb_encoder(image_view)
+        bb_encoded = bb_encoded.unsqueeze(-2)
+        encoded = torch.cat([encoded, bb_encoded], dim=-2)
         return encoded
 
     def forward(self, data):
