@@ -8,7 +8,7 @@ Requirements = (regexp("nandor-3",TARGET.Machine) || regexp("eldar",TARGET.Machi
 # UTCS has 18 such machine, to take a look, run 'condor_status  -constraint 'GTX1080==true'
 request_cpus = 1
 request_gpus = 2
-request_memory = 2500
+request_memory = 16000
 executable = /bin/bash
 arguments = train.sh
 getenv = true
