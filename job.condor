@@ -1,7 +1,9 @@
 Executable = train.sh
 Log = foo.log
 request_gpus=2
+Requirements = Memory >= 2000 && InMastodon
 +Project="AI_ROBOTICS"
 +ProjectDescription="training for behavioral cloning"
 +Group="UNDER"
+Notification = complete
 Queue
