@@ -1,7 +1,8 @@
 Executable = train.sh
 Log = foo.log
++GPUJob = true
+requirements = (TARGET.GPUSlot) && (Memory >= 2000 && InMastodon)
 request_gpus=2
-Requirements = Memory >= 2000 && InMastodon
 +Project="AI_ROBOTICS"
 +ProjectDescription="training for behavioral cloning"
 +Group="UNDER"
