@@ -2,6 +2,7 @@ import robomimic.utils.tensor_utils as TensorUtils
 import torch
 import torch.nn as nn
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from torchvision.models.detection import ssdlite320_mobilenet_v3_large
 
 from libero.lifelong.models.modules.rgb_modules import *
 from libero.lifelong.models.modules.language_modules import *
@@ -174,9 +175,7 @@ class BoundingBoxEncoder(nn.Module):
 
         # reduces the backbone size so the model becomes lighter
 
-        self.bb_detector = fasterrcnn_resnet50_fpn(
-            pretrained=True
-        )
+        self.bb_detector = ssdlite320_mobilenet_v3_large(pretrained=True)
 
         self.bounding_box_encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_embedding,
@@ -332,12 +331,34 @@ class BCTransformerPolicy(BasePolicy):
         encoded = torch.cat(encoded, -2)  # (B, T, num_modalities, E)
 
         # 4. encode bounding box
-        image_view = data["obs"]["agentview_rgb"]
-        image_view = image_view.reshape(image_view.shape[0] * image_view.shape[1], image_view.shape[2],
-                                        image_view.shape[3], image_view.shape[4])
+        # picks the first image
+        image_view = data["obs"]["agentview_rgb"][0][0]
+        # print keys in data["obs"]
+        # print their shape as well
+        # print(image_view.shape)
+        #
+        image_view = image_view.unsqueeze(0)
+        # print(image_view.shape)
+        # image_view = image_view.reshape(image_view.shape[0] * image_view.shape[1], image_view.shape[2],
+        #                                 image_view.shape[3], image_view.shape[4])
         # (1, 10, 64)
         bb_encoded = self.bb_encoder(image_view)
         bb_encoded = bb_encoded.unsqueeze(-2)
+
+        # allows for multiple batches
+        # batch_sz = encoded.shape[0]
+        # print(encoded.shape)
+        batch_sz = encoded.shape[0]
+        detect_cnt = encoded.shape[0]
+        # print(bb_encoded.shape)
+        # bb_encoded = bb_encoded.view(batch_sz, detect_cnt, 1, -1)
+
+        # repeat bb_encoded 10 times along the dimension=1
+        bb_encoded = bb_encoded.repeat(batch_sz, 10, 1, 1)
+        # print(bb_encoded.shape)
+
+
+        # bb_encoded = bb_encoded.view(B, )
         encoded = torch.cat([encoded, bb_encoded], dim=-2)
         return encoded
 

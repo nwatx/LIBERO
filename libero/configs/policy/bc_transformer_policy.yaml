@@ -11,6 +11,8 @@ transformer_mlp_hidden_size: 256
 transformer_dropout: 0.1
 transformer_max_seq_len: 10
 
+bounding_box_enabled: true
+
 defaults:
     - data_augmentation@color_aug: batch_wise_img_color_jitter_group_aug.yaml
     - data_augmentation@translation_aug: translation_aug.yaml
