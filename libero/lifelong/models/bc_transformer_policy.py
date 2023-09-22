@@ -354,10 +354,11 @@ class BCTransformerPolicy(BasePolicy):
         # bb_encoded = bb_encoded.view(batch_sz, detect_cnt, 1, -1)
 
         # repeat bb_encoded 10 times along the dimension=1
-        bb_encoded = bb_encoded.repeat(batch_sz, 10, 1, 1)
+        bb_encoded = bb_encoded.repeat(batch_sz, encoded.shape[1], 1, 1)
         # print(bb_encoded.shape)
 
-
+        # print(encoded.shape)
+        # print(bb_encoded.shape)
         # bb_encoded = bb_encoded.view(B, )
         encoded = torch.cat([encoded, bb_encoded], dim=-2)
         return encoded
