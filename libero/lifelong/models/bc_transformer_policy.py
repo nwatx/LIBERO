@@ -253,8 +253,8 @@ class BCTransformerPolicy(BasePolicy):
             **policy_cfg.language_encoder.network_kwargs
         )
 
-        self.bb_encoder_size = 64
-        self.bb_encoder = BoundingBoxEncoder(d_embedding=self.bb_encoder_size)
+        # self.bb_encoder_size = 64
+        # self.bb_encoder = BoundingBoxEncoder(d_embedding=self.bb_encoder_size)
 
         ### 3. encode extra information (e.g. gripper, joint_state)
         self.extra_encoder = ExtraModalityTokens(
@@ -332,35 +332,39 @@ class BCTransformerPolicy(BasePolicy):
 
         # 4. encode bounding box
         # picks the first image
-        image_view = data["obs"]["agentview_rgb"][0][0]
+        # image_view = data["obs"]["agentview_rgb"][0][0]
         # print keys in data["obs"]
         # print their shape as well
         # print(image_view.shape)
         #
-        image_view = image_view.unsqueeze(0)
+        # image_view = image_view.unsqueeze(0)
         # print(image_view.shape)
         # image_view = image_view.reshape(image_view.shape[0] * image_view.shape[1], image_view.shape[2],
         #                                 image_view.shape[3], image_view.shape[4])
         # (1, 10, 64)
-        bb_encoded = self.bb_encoder(image_view)
-        bb_encoded = bb_encoded.unsqueeze(-2)
+        # bb_encoded = self.bb_encoder(image_view)
+        # bb_encoded = bb_encoded.unsqueeze(-2)
 
         # allows for multiple batches
         # batch_sz = encoded.shape[0]
         # print(encoded.shape)
-        batch_sz = encoded.shape[0]
-        detect_cnt = encoded.shape[0]
+        # batch_sz = encoded.shape[0]
+        # detect_cnt = encoded.shape[0]
         # print(bb_encoded.shape)
         # bb_encoded = bb_encoded.view(batch_sz, detect_cnt, 1, -1)
 
         # repeat bb_encoded 10 times along the dimension=1
+<<<<<<< Updated upstream
         bb_encoded = bb_encoded.repeat(batch_sz, encoded.shape[1], 1, 1)
+=======
+        # bb_encoded = bb_encoded.repeat(batch_sz, 10, 1, 1)
+>>>>>>> Stashed changes
         # print(bb_encoded.shape)
 
         # print(encoded.shape)
         # print(bb_encoded.shape)
         # bb_encoded = bb_encoded.view(B, )
-        encoded = torch.cat([encoded, bb_encoded], dim=-2)
+        # encoded = torch.cat([encoded, bb_encoded], dim=-2)
         return encoded
 
     def forward(self, data):
